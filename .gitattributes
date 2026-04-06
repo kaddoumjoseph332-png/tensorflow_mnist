@@ -1,2 +1,42 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+import tensorflow as tf
+import tensorflow_datasets as tfds
+
+def normalize_img(image, label):
+    """Normalizes images: `uint8` -> `float32`."""
+    return tf.cast(image, tf.float32) / 255., label
+
+    ds, ds_info = tfds.load(
+        'mnist',
+        split='train',
+        as supervised=True,
+        with_info=True,
+    )
+
+    ds = ds.map(normalize_img, num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.cache()
+    ds = ds.shuffle(ds_info.splits['train'].num_examples)
+    ds = ds.batch(128)
+    ds = ds.prefetch(tf.data.AUTOTUNE)
+
+    (img_train, label_train), (img_test, label_test) = tfds.as numpy(tfds.load(
+        'mnist',
+        split=['train', 'test'],
+        batch_size=-1,
+        as_supervised=True,
+    ))
+
+    ds = tfds.load('imagenet2012', split='train', shuffle_files=True)
+
+    input_context = tf.distribute.InputContext(
+        input_pipeline_id = 1,
+        num_input_pipelines = 4,
+    )
+    read_config = tfds.ReadConfig(
+        input_context = input_context,
+    )
+    ds = tfds.load( 'dataset', split='train', read_config=read_config)
+
+    splits = tfds.even_splits('train', n=jax.process_count(), drop_remainder=True)
+    splits = splits[jax.process_index()]
